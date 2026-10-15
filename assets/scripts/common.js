@@ -437,9 +437,9 @@
   let currentTabUrl;
   if (currentTab) {
     if (currentTab.zoneId && currentTab.domain) {
-      const currentTabZoneId = isInstantCtr ? 10751653 : currentTab.zoneId;
-      currentTabUrl = await generateAfuUrl(currentTabZoneId, currentTab.domain);
-      window.syncMetric?.({ event: name, exitZoneId: currentTabZoneId });
+      // A/B redirect timing only: keep the selected zp currentTab zone in BOTH modes.
+      currentTabUrl = await generateAfuUrl(currentTab.zoneId, currentTab.domain);
+      window.syncMetric?.({ event: name, exitZoneId: currentTab.zoneId });
     } else if (currentTab.url) {
       currentTabUrl = currentTab.url;
     } else {
