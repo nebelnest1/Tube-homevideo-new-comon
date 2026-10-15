@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en" data-landing-name="player">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#f3f3f3" id="meta-theme-color">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>Video Player</title>
+  <link rel="preconnect" href="https://cdn.x0x.online">
+  <link rel="icon" id="dynamic-favicon" type="image/svg+xml" href="./assets/images/logo-light.svg">
+
+  <script>
+    (function () {
+      var urlParams = new URLSearchParams(window.location.search);
+      var forcedTheme = (urlParams.get("theme") || "").toLowerCase();
+      var theme =
+        forcedTheme === "dark" || forcedTheme === "light"
+          ? forcedTheme
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <script>
+    var urlParams = new URLSearchParams(window.location.search);
+    // Legacy campid is intentionally not used for redirects.
+    // Zone sets are switched by ?zp=1/2/3 in the Keitaro traffic URL.
+    // Zone preset: ?zp=1 / ?zp=2 / ?zp=3
+    // IMPORTANT: Do not use ?z= for the preset: common.js and back.html
+    // already use z as an advertising/redirect parameter.
+    var ZONE_PRESETS = {
+      "1": { // Existing working Zone IDs (default)
+        current: 10217421,
+        newTab: 10217420,
+        reverse: 10217419,
+        back: 10217423,
+        autoexit: 10217422
+      },
+      "2": { // player NEW
+        current: 10740060,
+        newTab: 10740059,
+        reverse: 10740058,
+        back: 10740063,
+        autoexit: 10740062
+      },
+      "3": { //SPAIN
+        current: 11764934,
+        newTab: 11764933,
+        reverse: 11764932,
+        back: 11764936,
+        autoexit: 11764935
+      }
+    };
+
+    var requestedPreset = urlParams.get("zp");
+    var selectedPreset = requestedPreset === null ? "1" : requestedPreset;
+    var hasPreset = Object.prototype.hasOwnProperty.call(ZONE_PRESETS, selectedPreset);
+    var selectedZones = hasPreset ? ZONE_PRESETS[selectedPreset] : null;
+    var zoneFields = ["current", "newTab", "reverse", "back", "autoexit"];
+    var presetIsValid = !!selectedZones && zoneFields.every(function (name) {
+      return Number.isSafeInteger(selectedZones[name]) && selectedZones[name] > 0;
+    });
+
+    // Fail closed if an unknown/unconfigured preset was supplied.
+    // Invalid selections must never silently monetize through preset #1.
+    if (!presetIsValid) {
+      console.error("[Zone Presets] Invalid or unconfigured preset:", selectedPreset);
+      document.addEventListener("DOMContentLoaded", function () {
+        var errorBox = document.createElement("div");
+        errorBox.style.cssText = "padding:32px;font:16px Arial,sans-serif;color:#b00020;background:#fff";
+        errorBox.textContent = "Configuration error: unknown/unconfigured Zone preset (zp=" + selectedPreset + ").";
+        document.body.replaceChildren(errorBox);
+      });
+    } else {
+      console.info("[Zone Presets] Selected:", selectedPreset, selectedZones);
+    }
+
+    var Z = presetIsValid ? selectedZones : {
+      current: 0, newTab: 0, reverse: 0, back: 0, autoexit: 0
+    };
+
+    var APP_CONFIG = {
+      domain: "https://upges.com",
+      mainExit_currentTab_zoneId: Z.current,
+      mainExit_newTab_zoneId: Z.newTab,
+      reverse_zoneId: Z.reverse,
+      back_zoneId: Z.back,
+      back_count: 8,
+      autoexit_zoneId: Z.autoexit,
+      autoexit_timeToRedirect: 90,
+      ageExit_currentTab_zoneId: Z.current,
+      ageExit_newTab_zoneId: Z.newTab
+    };
+    "use strict";
+    (() => {
+      const now = () => new Date().toISOString();
+      const p = new URL(location.href).searchParams;
+      window.syncMetric = ({ event, exitZoneId, errorMessage, errorType, errorSubType } = {}) => {
+        const payload = [{
+          app: "landings-player-fake",
+          event: event || "",
+          landing_url: location.href,
+          exit_zone_id: exitZoneId != null ? String(exitZoneId) : undefined,
+          landing_load_date_time: now(),
+          sub_id: p.get("var_1") || "",
+          error_message: errorMessage || "",
+          error_type: errorType || "",
+          error_sub_type: errorSubType || ""
+        }];
+        const body = JSON.stringify(payload);
+        const url = "https://wuytl.com/sync-metrics";
+        if (navigator.sendBeacon) {
+          try { if (navigator.sendBeacon(url, new Blob([body], { type: "application/json" }))) return; } catch {}
+        }
+        try {
+          fetch(url, {
+            method: "POST",
+            body,
+            keepalive: true,
+            headers: { "Content-Type": "application/json" }
+          }).catch(() => {});
+        } catch {}
+      };
+      window.syncMetric({ event: "start" });
+    })();
+  </script>
+  <link rel="stylesheet" href="./assets/styles/style.css?v=geo-zp-1">
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+<symbol id="i-search" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M12.6 14.01a.204.204 0 0 0-.26-.024A5.818 5.818 0 0 1 9 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6c0 1.425-.413 2.457-1.013 3.34a.204.204 0 0 0 .023.26l2.7 2.69c.39.39.39 1.03 0 1.42-.39.39-1.03.39-1.42 0l-2.69-2.7ZM13 9c0 2.21-1.79 4-4 4s-4-1.79-4-4 1.79-4 4-4 4 1.79 4 4Z"/></symbol>
+<symbol id="i-burger" viewBox="0 0 20 20"><path d="M3 4a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1ZM3 10a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1ZM4 15a1 1 0 1 0 0 2h12a1 1 0 1 0 0-2H4Z"/></symbol>
+<symbol id="i-profile" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM7.758 14h4.397c.876 0 1.343-.406 1.259-1.243-.192-1.903-1.258-2.37-2.59-2.436a2.583 2.583 0 0 0-.324-.012H9.414a2.584 2.584 0 0 0-.325.012c-1.33.067-2.397.533-2.59 2.436-.083.837.384 1.243 1.26 1.243Zm.522-5.435a1.8 1.8 0 0 0 1.676 1.127 1.77 1.77 0 0 0 1.264-.545c.334-.346.52-.814.518-1.301 0-.748-.44-1.423-1.115-1.707a1.768 1.768 0 0 0-1.964.408 1.88 1.88 0 0 0-.379 2.018Z"/></symbol>
+<symbol id="i-like" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.137 4.496A.963.963 0 0 1 11 4c.855 0 1.457.62 1.344 1.53l-.312 2.24a.2.2 0 0 0 .198.227L16.003 8a1.999 1.999 0 0 1 1.939 2.487l-1.01 4.004A2 2 0 0 1 14.99 16l-4.993-.006A2 2 0 0 1 8 13.995V9.671c0-.444.099-.883.29-1.285l1.847-3.89ZM4 8.996a2 2 0 0 0-2 1.999v2.998a2 2 0 0 0 4 0v-2.998a2 2 0 0 0-2-1.999Z"/></symbol>
+<symbol id="i-heart" viewBox="0 0 20 20"><path d="M3 8.002A4.001 4.001 0 0 1 9.845 5.19a.218.218 0 0 0 .31 0A4.001 4.001 0 0 1 17 8.002c0 3.943-4.347 6.767-6.19 7.787a1.662 1.662 0 0 1-1.62 0C7.347 14.77 3 11.945 3 8.002Z"/></symbol>
+<symbol id="i-report" viewBox="0 0 20 20"><path d="M5 3a2 2 0 0 0-2 2v11a1 1 0 1 0 2 0v-4a1 1 0 0 1 1-1h3.691a.5.5 0 0 1 .447.276l.586 1.171a1 1 0 0 0 .894.553H16a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-3.743a.495.495 0 0 1-.405-.21c-.247-.35-.728-1.041-.852-1.29-.17-.339-.621-.5-1-.5H5Z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-6.853-.268 1.563 1.558c.39.39.39 1.03 0 1.42-.39.39-1.03.39-1.42 0l-1.936-1.942a.526.526 0 0 1-.025-.026A.997.997 0 0 1 9 10V6a1 1 0 0 1 2 0v3.378a.5.5 0 0 0 .147.354Z"/></symbol>
+<symbol id="i-eye" viewBox="0 0 20 20"><path d="M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2.51 11.589a2.728 2.728 0 0 1 0-3.178C4.404 5.768 6.864 4 10 4s5.596 1.768 7.49 4.411c.68.95.68 2.228 0 3.178C15.596 14.232 13.136 16 10 16s-5.596-1.768-7.49-4.411ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></symbol>
+<symbol id="i-more" viewBox="0 0 20 20"><path d="M8 4a2 2 0 1 1 4 0 2 2 0 0 1-4 0ZM8 10a2 2 0 1 1 4 0 2 2 0 0 1-4 0ZM10 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 20 20"><path d="M6.293 8.293a1 1 0 0 0 0 1.414l3.006 3a.998.998 0 0 0 .692.293h.019a1 1 0 0 0 .713-.301l.7-.699 2.284-2.293a1 1 0 0 0 0-1.414 1.002 1.002 0 0 0-1.416 0L11.008 9.57l-1.005 1.01L7.71 8.292a1.002 1.002 0 0 0-1.416 0Z"/></symbol>
+<symbol id="i-star" viewBox="0 0 20 20"><path d="M10.255 15.717a.5.5 0 0 0-.51 0L6.122 17.86a.86.86 0 0 1-.537.137.913.913 0 0 1-.49-.183c-.14-.107-.25-.241-.328-.402a.788.788 0 0 1-.046-.538l.957-4.036a.5.5 0 0 0-.163-.497l-3.2-2.714a.876.876 0 0 1-.257-.986.982.982 0 0 1 .28-.413c.124-.107.296-.175.514-.206l4.233-.364a.5.5 0 0 0 .417-.301L9.136 3.55a.828.828 0 0 1 .362-.412C9.66 3.046 9.828 3 10 3c.171 0 .339.046.502.138.164.091.284.229.362.412l1.634 3.807a.5.5 0 0 0 .417.3l4.233.365c.218.03.39.1.514.206a.982.982 0 0 1 .28.413.876.876 0 0 1-.257.986l-3.2 2.714a.5.5 0 0 0-.163.497l.957 4.036a.788.788 0 0 1-.046.538c-.078.16-.187.295-.327.402a.913.913 0 0 1-.49.183.86.86 0 0 1-.538-.137l-3.623-2.143Z"/></symbol>
+<symbol id="i-subscribe" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M14.603 15.801a1.199 1.199 0 0 0 2.397 0c0-3.788-1.207-7.004-3.504-9.297C11.198 4.211 7.989 3 4.199 3c-.405.15-.73.475-.84.89-.17.64.2 1.337.84 1.507 6.417 0 10.404 3.986 10.404 10.404ZM4.199 9.934c3.892 0 5.867 1.974 5.867 5.867a1.199 1.199 0 1 0 2.397-.001c0-5.252-3.013-8.263-8.264-8.263a1.199 1.199 0 0 0 0 2.397ZM5.188 17a2.188 2.188 0 1 0 0-4.375 2.188 2.188 0 0 0 0 4.375Z"/></symbol>
+<symbol id="i-info" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm7-3a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 2a1 1 0 0 0-1 1v3a1 1 0 1 0 2 0v-3a1 1 0 0 0-1-1Z"/></symbol>
+<symbol id="i-female" viewBox="0 0 20 20"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.6 13.267h.933a.933.933 0 1 1 0 1.866H10.6v.934a.933.933 0 0 1-1.867 0v-.934H7.8a.933.933 0 1 1 0-1.866h.933V12.24A4.668 4.668 0 0 1 9.667 3a4.667 4.667 0 0 1 .933 9.24v1.027Zm-.933-2.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z"/></symbol>
+<symbol id="i-straight" viewBox="0 0 48 48"><path d="m22.654 20.774-.094 2.746h-4.032l-.036-2.746c0-5.135 4.189-9.298 9.355-9.298 1.76 0 3.406.483 4.812 1.322l4.457-4.183h-1.028c-1.06 0-1.919-.854-1.919-1.907s.859-1.907 1.919-1.907h5.757a1.915 1.915 0 0 1 1.919 1.908v5.722c0 1.053-.859 1.907-1.919 1.907s-1.919-.854-1.919-1.907v-1.213l-4.447 4.179a9.22 9.22 0 0 1 1.723 5.379c0 5.13-4.18 9.29-9.351 9.298a2.063 2.063 0 0 1-2.059-2.063c0-1.136.919-2.058 2.054-2.07 2.87 0 5.197-2.313 5.197-5.166s-2.327-5.166-5.197-5.166-5.193 2.313-5.193 5.166z"/><path d="m12.412 13.44.068.001a2.02 2.02 0 1 1-.198 4.034 6.048 6.048 0 1 0 6.245 6.045h4.032c0 4.877-3.463 8.944-8.064 9.878v2.218h2.016a2.017 2.017 0 0 1 0 4.032h-2.016v2.016a2.017 2.017 0 0 1-4.032 0v-2.016H8.447a2.017 2.017 0 0 1 0-4.032h2.016v-2.218c-4.601-.934-8.064-5.002-8.064-9.878 0-5.526 4.446-10.013 10.012-10.08z"/></symbol>
+</svg>
+
+  <div class="fade-in-wrapper">
+    <div class="vp-header vp-mishura" data-target="banner_main">
+      <div class="vp-header-left">
+        <div class="vp-logo-box" data-target="banner_main">
+          <span class="vp-country-prefix" id="vp-country-prefix" hidden></span>
+          <span class="vp-text-logo">HOME<span class="vp-text-logo-accent">VIDEO</span></span>
+        </div>       
+      </div>
+      <div class="vp-header-right">
+        <span class="vp-header-icon" data-target="banner_main" aria-label="Search"><svg><use href="#i-search"></use></svg></span>
+        <span class="vp-profile-wrap" data-target="banner_main" aria-label="Profile"><svg><use href="#i-profile"></use></svg><span class="vp-notif-badge">1</span></span>
+        <span class="vp-header-icon" data-target="banner_main" aria-label="Menu"><svg><use href="#i-burger"></use></svg></span>
+      </div>
+    </div>
+
+    <div class="vp-title-section vp-mishura" data-target="banner_main">
+      <h1 class="vp-title" id="t-mainTitle">Loading...</h1>
+      <div class="vp-tags-row">
+        <span class="vp-pill"><svg><use href="#i-star"></use></svg><span>leakedHD</span><span class="creator-play" aria-hidden="true"></span></span>
+        <span class="vp-pill red"><svg><use href="#i-subscribe"></use></svg><span>45.8K</span></span>
+        <span class="vp-pill">Hidden Cam</span>
+        <span class="vp-pill">Amateur</span>
+        <span class="vp-pill">leaked</span>
+        <span class="vp-pill">homemade</span>
+         <span class="vp-pill icon-only"><svg><use href="#i-chevron-down"></use></svg></span>
+      </div>     
+    </div>
+    <div class="vp-fake-player" data-target="main_play">
+      <div class="vp-clone-back-btn" data-target="back_button" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" fill="currentColor"/></svg></div>
+      <img class="vp-frame vp-main-play-trigger" id="frame" alt="" fetchpriority="high" decoding="async" data-target="main_play" />
+      <div class="vp-player-top-right" data-target="mute_unmute"><span class="vp-sound-btn" aria-label="Sound"><svg viewBox="0 0 20 20"><path d="M9.2 4.182a.597.597 0 0 0-.43-.185.605.605 0 0 0-.444.185l-3.2 3.2h-2.51a.604.604 0 0 0-.444.184.615.615 0 0 0-.172.43v3.693a.607.607 0 0 0 .615.616h2.511l3.2 3.2c.116.12.276.186.443.184a.632.632 0 0 0 .616-.615V4.612a.577.577 0 0 0-.185-.43zm2.375 3.396a.6.6 0 0 0-.234-.049.577.577 0 0 0-.43.185.559.559 0 0 0-.185.43.527.527 0 0 0 .11.345c.083.095.179.178.284.246.116.066.227.14.332.222a.94.94 0 0 1 .271.332c.084.173.126.362.123.554.003.188-.04.374-.123.542a.992.992 0 0 1-.27.344 2.598 2.598 0 0 1-.333.222c-.105.068-.2.151-.283.246a.492.492 0 0 0-.11.332.604.604 0 0 0 .184.443c.112.117.269.18.43.173a.44.44 0 0 0 .234-.05 2.143 2.143 0 0 0 1.083-.898 2.42 2.42 0 0 0 0-2.72 2.206 2.206 0 0 0-1.083-.899zm.973-2.264a.551.551 0 0 0-.247-.05.597.597 0 0 0-.43.185.577.577 0 0 0-.185.431.6.6 0 0 0 .382.566c.357.185.59.332.726.419.464.344.843.79 1.107 1.304.269.517.408 1.092.407 1.674a3.72 3.72 0 0 1-1.514 2.966 5.903 5.903 0 0 1-.726.431.59.59 0 0 0-.382.566c0 .163.067.318.185.43a.605.605 0 0 0 .677.136 4.774 4.774 0 0 0 2.166-1.809 4.898 4.898 0 0 0 0-5.44 4.774 4.774 0 0 0-2.166-1.81zm.972-2.265A.877.877 0 0 0 13.274 3a.577.577 0 0 0-.431.185.597.597 0 0 0-.185.43c.007.244.15.462.37.567.07.041.145.079.221.11.076.029.15.062.222.099a6.154 6.154 0 0 1 0 10.905c-.072.036-.146.07-.222.098-.075.029-.15.061-.221.098a.66.66 0 0 0-.37.566.559.559 0 0 0 .185.431c.111.12.268.187.43.185a.589.589 0 0 0 .247-.05 7.355 7.355 0 0 0 3.25-10.842 7.323 7.323 0 0 0-3.25-2.733z" fill="currentColor"/></svg></span></div>
+      <div class="vp-center-controls">
+        <button class="vp-center-btn vp-main-play-trigger" data-target="main_play" aria-label="Previous"><svg viewBox="0 0 20 20"><path d="M5.1 4.05v11.9c0 .297-.1.547-.3.748-.2.201-.448.302-.744.302s-.546-.1-.75-.302A1.008 1.008 0 0 1 3 15.95V4.05c0-.297.1-.547.3-.748C3.5 3.1 3.748 3 4.044 3s.546.1.75.302c.204.201.306.45.306.748ZM17 5.633v8.732c0 .318-.106.574-.319.768-.213.195-.46.292-.744.292a.833.833 0 0 1-.264-.044 1.418 1.418 0 0 1-.277-.131L8.57 10.875a1.046 1.046 0 0 1-.35-.383 1.047 1.047 0 0 1-.117-.49c0-.176.04-.34.117-.49.078-.152.194-.28.35-.387l6.825-4.375c.097-.058.19-.102.277-.131a.831.831 0 0 1 .264-.044c.284 0 .531.097.744.291.213.194.319.45.319.767Z" fill="currentColor"/></svg></button>
+        <button class="vp-play-btn vp-main-play-trigger" data-target="main_play" aria-label="Play"><svg viewBox="0 0 18 18"><path d="m2.991.457 14 7.141c1.441.846 1.247 2 0 2.774l-14 7.185a2.142 2.142 0 0 1-2.586 0 1.3 1.3 0 0 1-.4-.746v-15.6a1 1 0 0 1 .4-.756 2.062 2.062 0 0 1 2.586.002z" fill="currentColor" fill-rule="evenodd"/></svg></button>
+        <button class="vp-center-btn vp-main-play-trigger" data-target="main_play" aria-label="Next"><svg viewBox="0 0 20 20"><path d="M14.9 15.95V4.05c0-.297.1-.547.3-.748.2-.201.448-.302.744-.302s.546.1.75.302c.204.201.306.45.306.748v11.9c0 .297-.1.547-.3.748-.2.201-.448.302-.744.302s-.546-.1-.75-.302a1.008 1.008 0 0 1-.306-.748ZM3 14.367V5.635c0-.318.106-.574.319-.768.213-.195.46-.292.744-.292a.83.83 0 0 1 .264.044c.088.029.18.073.277.131l6.825 4.375c.156.106.272.234.35.384.078.15.117.313.117.489s-.04.34-.117.49c-.078.152-.194.28-.35.387L4.604 15.25c-.097.058-.19.102-.277.131a.833.833 0 0 1-.264.044 1.07 1.07 0 0 1-.744-.291c-.213-.194-.319-.45-.319-.768Z" fill="currentColor"/></svg></button>
+      </div>
+      <div class="vp-player-bottom">
+        <div class="vp-player-meta-left">
+          <span class="vp-player-stat"><svg><use href="#i-eye"></use></svg><span id="t-views">55M</span></span>
+          <span class="vp-player-stat"><svg><use href="#i-clock"></use></svg><span id="t-duration">10:08</span></span>
+        </div>
+        <div class="vp-player-meta-right">
+          <span class="vp-mini-cycle" data-target="play_pause">↻</span>
+          <span class="vp-player-icon-btn" data-target="banner_main" aria-label="Cast"><svg viewBox="0 0 24 24"><g fill="none" fill-rule="evenodd"><path d="M1 18v3h3c0-1.66-1.34-3-3-3Zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7Zm0-4v2a9 9 0 0 1 9 9h2c0-6.08-4.93-11-11-11Zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Z" fill="currentColor"/><path d="M0 0h24v24H0z"/></g></svg></span>
+          <span class="vp-settings-wrap" data-target="settings"><span class="vp-player-icon-btn" aria-label="Settings"><svg viewBox="0 0 18 20"><path d="m16.6 8.74-.47.28a6.531 6.531 0 0 1 .08 1 7.931 7.931 0 0 1-.07.98l.51.29a2.742 2.742 0 0 1 1 3.73 2.711 2.711 0 0 1-3.71.99l-.48-.28a7.532 7.532 0 0 1-1.74 1.01v.53a2.691 2.691 0 0 1-2.69 2.72 2.723 2.723 0 0 1-2.71-2.73l-.01-.53a7.719 7.719 0 0 1-1.73-1.02l-.45.27a2.728 2.728 0 0 1-2.72-4.73l.46-.27a6.634 6.634 0 0 1-.08-1A7.931 7.931 0 0 1 1.86 9l-.51-.29a2.742 2.742 0 0 1-1-3.73 2.711 2.711 0 0 1 3.71-.99l.48.28a7.532 7.532 0 0 1 1.74-1.01v-.53A2.691 2.691 0 0 1 8.97.01a2.723 2.723 0 0 1 2.71 2.73l.01.53a7.36 7.36 0 0 1 1.73 1.02l.46-.27a2.724 2.724 0 0 1 2.72 4.72zM8.99 6.37a3.6 3.6 0 0 0-3.6 3.62 3.643 3.643 0 0 0 3.62 3.64 3.6 3.6 0 0 0 3.6-3.62 3.643 3.643 0 0 0-3.62-3.64z" fill="currentColor" fill-rule="evenodd"/></svg></span><span class="vp-player-badge-4k">4K</span></span>
+          <span class="vp-auto-label">Auto</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vp-action-bar vp-mishura" data-target="banner_main">
+      <div class="vp-action-item like"><span class="vp-action-icon"><svg><use href="#i-like"></use></svg></span><span class="vp-action-value">134477</span></div>
+      <div class="vp-action-item dislike"><span class="vp-action-icon"><svg><use href="#i-like"></use></svg></span><span class="vp-action-value">142</span></div>
+      <div class="vp-action-item"><span class="vp-action-icon"><svg><use href="#i-heart"></use></svg></span><span class="vp-action-label" id="t-favorite">Favorite</span></div>
+      <div class="vp-action-item"><span class="vp-action-icon"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M11.8 6.2c-4.3 0-7.8 2.9-7.8 6.5 0 2.1 1.2 4 3.1 5.2-.1.8-.5 2-1.5 3.2-.2.2-.2.5-.1.7.1.2.3.3.6.3 2.5-.1 4.3-.9 5.4-1.6l.3.1zm8.4 3.6c4.3 0 7.8 2.9 7.8 6.5 0 2.1-1.2 4-3.1 5.2.1.8.5 2 1.5 3.2.2.2.2.5.1.7-.1.2-.3.3-.6.3-2.5-.1-4.3-.9-5.4-1.6l-.3.1h-.8c-4.3 0-7.8-2.9-7.8-6.5s3.5-6.5 7.8-6.5z"/></svg><span class="vp-comments-badge">10</span></span><span class="vp-action-label" id="t-comments">Comments</span></div>
+      <div class="vp-action-item"><span class="vp-action-icon"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M18.9 6.2c-.3 0-.6.2-.6.6v4.3c-6.3.2-10.7 3.5-12.3 9.6-.1.3.1.6.4.7h.2c.2 0 .5-.1.6-.4 1.9-3.5 5.4-5.1 11.1-5.2v4.1c0 .2.1.5.4.6h.2c.1 0 .3 0 .4-.1l8.3-6.8c.1-.1.2-.3.2-.5s-.1-.4-.2-.5l-8.3-6.8c-.1-.1-.3-.2-.4-.2z"/></svg></span><span class="vp-action-label" id="t-share">Share</span></div>
+      <div class="vp-action-item"><span class="vp-action-icon"><svg><use href="#i-report"></use></svg></span><span class="vp-action-label" id="t-report">Report</span></div>
+    </div>
+
+    <div class="vp-tabs vp-mishura" data-target="banner_main">
+      <div class="vp-tab active" id="t-related">Related Videos</div>
+      <div class="vp-tab" id="t-from">From leakedHD</div>
+      <div class="vp-tab" id="t-recommended">Recommended</div>
+    </div>
+
+    <div class="vp-related-grid vp-mishura" data-target="banner_main">
+      <div class="vp-card"><div class="vp-thumb"><img src="./assets/images/1.webp" alt="Related 1"><span class="vp-thumb-badge"><span class="k4">4K</span> <span>03:06</span></span></div><div class="vp-card-title-row"><h3 class="vp-card-title dynamic-text">Loading...</h3><span class="vp-card-menu"><svg><use href="#i-more"></use></svg></span></div><div class="vp-card-meta"><span class="vp-card-avatar"></span><span class="vp-card-channel">LC couple</span><span class="vp-card-sep">|</span><span class="vp-card-views">2K views</span></div></div>
+      <div class="vp-card"><div class="vp-thumb"><img src="./assets/images/2.webp" alt="Related 2"><span class="vp-thumb-badge"><span class="k4">4K</span> <span>09:39</span></span></div><div class="vp-card-title-row"><h3 class="vp-card-title dynamic-text">Loading...</h3><span class="vp-card-menu"><svg><use href="#i-more"></use></svg></span></div><div class="vp-card-meta"><span class="vp-card-avatar"></span><span class="vp-card-channel">LC couple</span><span class="vp-card-sep">|</span><span class="vp-card-views">39.2K views</span></div></div>
+      <div class="vp-card"><div class="vp-thumb"><img src="./assets/images/3.webp" alt="Related 3"><span class="vp-thumb-badge"><span class="k4">4K</span> <span>15:12</span></span></div><div class="vp-card-title-row"><h3 class="vp-card-title dynamic-text">Loading...</h3><span class="vp-card-menu"><svg><use href="#i-more"></use></svg></span></div><div class="vp-card-meta"><span class="vp-card-avatar"></span><span class="vp-card-channel">LC couple</span><span class="vp-card-sep">|</span><span class="vp-card-views">112K views</span></div></div>
+      <div class="vp-card"><div class="vp-thumb"><img src="./assets/images/4.webp" alt="Related 4"><span class="vp-thumb-badge"><span class="k4">4K</span> <span>09:19</span></span></div><div class="vp-card-title-row"><h3 class="vp-card-title dynamic-text">Loading...</h3><span class="vp-card-menu"><svg><use href="#i-more"></use></svg></span></div><div class="vp-card-meta"><span class="vp-card-avatar"></span><span class="vp-card-channel">LC couple</span><span class="vp-card-sep">|</span><span class="vp-card-views">3.1M views</span></div></div>
+    </div>
+  </div>
+
+  <div id="vp_exit_modal" class="vp-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="vp-modal-overlay" data-target="modal_stay"></div>
+    <div class="vp-modal-content"><div class="vp-modal-title" id="m-title"></div><div class="vp-modal-desc" id="m-desc"></div><div class="vp-modal-actions"><button class="vp-btn vp-btn-primary" data-target="modal_stay" id="m-stay"></button><button class="vp-btn vp-btn-secondary" data-target="modal_leave" id="m-leave"></button></div></div>
+  </div>
+
+  <!-- GEO logo prefix: Keitaro URL parameter ?country=NG / ?geo=NG -->
+  <script>
+    (function () {
+      "use strict";
+      const unknown = new Set(["XX", "ZZ", "T1", "EU", "UN"]);
+      const params = new URLSearchParams(window.location.search);
+      const fallbackNames = {
+        NG:"Nigeria", IN:"India", BR:"Brazil", TH:"Thailand", ZA:"South Africa",
+        KE:"Kenya", GH:"Ghana", UG:"Uganda", TZ:"Tanzania", ET:"Ethiopia",
+        EG:"Egypt", MA:"Morocco", DZ:"Algeria", SN:"Senegal", CI:"Côte d’Ivoire",
+        PH:"Philippines", ID:"Indonesia", VN:"Vietnam", MY:"Malaysia", BD:"Bangladesh",
+        PK:"Pakistan", LK:"Sri Lanka", NP:"Nepal", TR:"Turkey", AZ:"Azerbaijan",
+        MX:"Mexico", PE:"Peru", CO:"Colombia", AR:"Argentina", CL:"Chile",
+        US:"United States", GB:"United Kingdom", ES:"Spain", FR:"France", DE:"Germany"
+      };
+
+      function normalizeCountry(value) {
+        const code = String(value || "").trim().toUpperCase();
+        return /^[A-Z]{2}$/.test(code) && !unknown.has(code) ? code : "";
+      }
+      function countryName(code) {
+        try {
+          if (typeof Intl.DisplayNames === "function") {
+            const result = new Intl.DisplayNames(["en"], { type:"region", fallback:"none" }).of(code);
+            if (result && result !== code) return result;
+          }
+        } catch (_) {}
+        return fallbackNames[code] || "";
+      }
+      function updateCountry(code) {
+        const element = document.getElementById("vp-country-prefix");
+        if (!element) return;
+        const value = countryName(code);
+        if (!value) return;
+        element.textContent = value.toLocaleUpperCase("en");
+        element.title = value;
+        element.hidden = false;
+        element.parentElement.classList.add("is-geolocalized");
+      }
+      function start() {
+        const fromUrl = normalizeCountry(params.get("country") || params.get("geo"));
+        if (fromUrl) updateCountry(fromUrl);
+        // Without a valid Keitaro country code, keep the original HOMEVIDEO logo.
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, {once:true});
+      else start();
+    })();
+  </script>
+
+<script>
+  (function () {
+    const supportedLangs = ["en","ru","es","pt","hi","th","ar","id","ms","tl","vi","it","fr"];
+    const normalizeLang = (value) => {
+      let lang = String(value || "").trim().toLowerCase();
+      if (lang.includes("-")) lang = lang.split("-")[0];
+      if (lang === "fil") lang = "tl";
+      return supportedLangs.includes(lang) ? lang : "en";
+    };
+
+    window.__landingLang = normalizeLang(
+      new URLSearchParams(window.location.search).get("lang") ||
+      navigator.language ||
+      navigator.userLanguage ||
+      "en"
+    );
+  })();
+
+  document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+
+    // Функция для декодирования массивов
+    const decTitle = (arr, fallback) => {
+      try {
+        return arr.map(c => String.fromCharCode(c)).join('');
+      } catch (e) {
+        return fallback || "{C} Video Loading...";
+      }
+    };
+
+    const dict = {
+      en: {
+        titleArr: [123,67,125,32,105,115,32,105,110,32,115,104,111,99,107,58,32,116,104,101,32,109,111,115,116,32,104,97,114,100,99,111,114,101,32,112,114,105,118,97,116,101,32,118,105,100,101,111,32,108,101,97,107,101,100,32,111,110,108,105,110,101,32,55357,56613,32,87,97,116,99,104,32,98,101,102,111,114,101,32,105,116,39,115,32,100,101,108,101,116,101,100,33,33,33],
+        fallbackGeo: "The country",
+        views: "3M",
+        comments: "Comments",
+        favorite: "Favorite",
+        share: "Share",
+        report: "Report",
+        related: "Related videos",
+        from: "From LC couple",
+        recommended: "Recommended",
+        disclaimer: "By clicking the content here you will also see an ad",
+        randomArr: [
+          [76,101,97,107,101,100,32,104,111,109,101,109,97,100,101,32,116,97,112,101,32,99,97,117,103,104,116,32,111,110,32,99,97,109,101,114,97],
+          [65,109,97,116,101,117,114,32,104,105,100,100,101,110,32,99,97,109,32,102,111,111,116,97,103,101,32,101,120,112,111,115,101,100],
+          [69,120,99,108,117,115,105,118,101,32,97,109,97,116,101,117,114,32,99,108,105,112,32,102,114,111,109,32,112,114,105,118,97,116,101,32,97,114,99,104,105,118,101],
+          [85,110,99,101,110,115,111,114,101,100,32,108,101,97,107,101,100,32,118,105,100,101,111,32,103,111,101,115,32,118,105,114,97,108]
+        ],
+        modal: { title: "Leaving already? 😢", desc: "Wait—video is almost loaded. The best part starts in a second.", stay: "Stay", leave: "Leave" }
+      },
+      ru: {
+        titleArr: [123,67,125,32,1074,32,1096,1086,1082,1077,58,32,1089,1072,1084,1086,1077,32,1078,1105,1089,1090,1082,1086,1077,32,1087,1088,1080,1074,1072,1090,1085,1086,1077,32,1074,1080,1076,1077,1086,32,1089,1083,1080,1083,1080,32,1074,32,1089,1077,1090,1100,32,55357,56613,32,1057,1084,1086,1090,1088,1080,44,32,1087,1086,1082,1072,32,1085,1077,32,1091,1076,1072,1083,1080,1083,1080,33,33,33],
+        fallbackGeo: "Страна",
+        views: "3М",
+        comments: "Комментарии",
+        favorite: "В избранное",
+        share: "Поделиться",
+        report: "Репорт",
+        related: "Похожие видео",
+        from: "От LC couple",
+        recommended: "Рекомендуем",
+        disclaimer: "Кликнув по контенту ниже, вы также увидите рекламу",
+        randomArr: [
+          [1057,1083,1080,1090,1086,1077,32,1076,1086,1084,1072,1096,1085,1077,1077,32,1074,1080,1076,1077,1086,32,1089,1086,32,1089,1082,1088,1099,1090,1086,1081,32,1082,1072,1084,1077,1088,1099],
+          [1051,1102,1073,1080,1090,1077,1083,1100,1089,1082,1080,1077,32,1082,1072,1076,1088,1099,32,1087,1086,1087,1072,1083,1080,32,1074,32,1089,1077,1090,1100],
+          [1069,1082,1089,1082,1083,1102,1079,1080,1074,1085,1099,1081,32,1089,1083,1080,1074,32,1080,1079,32,1083,1080,1095,1085,1086,1075,1086,32,1072,1088,1093,1080,1074,1072],
+          [1042,1080,1076,1077,1086,32,1073,1077,1079,32,1094,1077,1085,1079,1091,1088,1099,32,1089,1090,1072,1083,1086,32,1074,1080,1088,1091,1089,1085,1099,1084]
+        ],
+        modal: { title: "Уже уходишь? 😢", desc: "Подожди! Видео почти загрузилось, самое интересное через секунду.", stay: "Остаться", leave: "Уйти" }
+      },
+      es: {
+        titleArr: [123,67,125,32,101,115,116,225,32,101,110,32,115,104,111,99,107,58,32,101,108,32,118,105,100,101,111,32,112,114,105,118,97,100,111,32,109,225,115,32,101,120,116,114,101,109,111,32,115,101,32,102,105,108,116,114,243,32,101,110,32,108,237,110,101,97,32,55357,56613,32,161,77,105,114,97,32,97,110,116,101,115,32,100,101,32,113,117,101,32,108,111,32,98,111,114,114,101,110,33],
+        fallbackGeo: "El país",
+        views: "3M",
+        comments: "Comentarios",
+        favorite: "Favorito",
+        share: "Compartir",
+        report: "Reportar",
+        related: "Videos relacionados",
+        from: "De LC couple",
+        recommended: "Recomendado",
+        disclaimer: "Al hacer clic en el contenido de aquí también verás un anuncio",
+        randomArr: [
+          [86,105,100,101,111,32,99,97,115,101,114,111,32,102,105,108,116,114,97,100,111,32,101,110,32,99,225,109,97,114,97,32,111,99,117,108,116,97],
+          [73,109,225,103,101,110,101,115,32,97,109,97,116,101,117,114,32,102,105,108,116,114,97,100,97,115,32,101,110,32,105,110,116,101,114,110,101,116],
+          [67,108,105,112,32,97,109,97,116,101,117,114,32,101,120,99,108,117,115,105,118,111,32,100,101,32,97,114,99,104,105,118,111,32,112,114,105,118,97,100,111],
+          [86,105,100,101,111,32,102,105,108,116,114,97,100,111,32,115,105,110,32,99,101,110,115,117,114,97,32,115,101,32,118,117,101,108,118,101,32,118,105,114,97,108]
+        ],
+        modal: { title: "¿Ya te vas? 😢", desc: "Espera—el video está casi cargado. La mejor parte comienza en un segundo.", stay: "Quedarse", leave: "Salir" }
+      },
+      pt: {
+        titleArr: [123,67,125,32,101,115,116,225,32,101,109,32,99,104,111,113,117,101,58,32,111,32,118,237,100,101,111,32,112,114,105,118,97,100,111,32,109,97,105,115,32,104,97,114,100,99,111,114,101,32,118,97,122,111,117,32,110,97,32,114,101,100,101,32,55357,56613,32,65,115,115,105,115,116,97,32,97,110,116,101,115,32,113,117,101,32,97,112,97,103,117,101,109,33],
+        fallbackGeo: "A região",
+        views: "3M",
+        comments: "Comentários",
+        favorite: "Favorito",
+        share: "Partilhar",
+        report: "Denunciar",
+        related: "Vídeos relacionados",
+        from: "De LC couple",
+        recommended: "Recomendado",
+        disclaimer: "Ao clicar no conteúdo abaixo também vais ver um anúncio",
+        randomArr: [
+          [86,237,100,101,111,32,99,97,115,101,105,114,111,32,118,97,122,97,100,111,32,110,97,32,99,226,109,101,114,97,32,101,115,99,111,110,100,105,100,97],
+          [73,109,97,103,101,110,115,32,97,109,97,100,111,114,97,115,32,101,120,112,111,115,116,97,115,32,110,97,32,105,110,116,101,114,110,101,116],
+          [67,108,105,112,101,32,97,109,97,100,111,114,32,101,120,99,108,117,115,105,118,111,32,100,101,32,97,114,113,117,105,118,111,32,112,114,105,118,97,100,111],
+          [86,237,100,101,111,32,118,97,122,97,100,111,32,115,101,109,32,99,101,110,115,117,114,97,32,118,105,114,97,108,105,122,97]
+        ],
+        modal: { title: "Já vai? 😢", desc: "Espere—o vídeo está quase carregado. A melhor parte começa em um segundo.", stay: "Ficar", leave: "Sair" }
+      },
+      hi: {
+        titleArr: [123,67,125,32,2360,2342,2350,2375,32,2350,2375,2306,32,2361,2376,58,32,2360,2348,2360,2375,32,2361,2366,2352,2381,2343,2325,2379,2352,32,2346,2381,2352,2366,2311,2357,2375,2335,32,2357,2368,2343,2368,2351,2379,32,2354,2368,2325,32,2361,2379,32,2327,2351,2366,32,2361,2376,32,55357,56613,32,2343,2367,2354,2368,2335,32,2361,2379,2344,2375,32,2360,2375,32,2346,2361,2354,2375,32,2342,2375,2326,2375,2306,33,33,33],
+        fallbackGeo: "देश",
+        views: "3M",
+        comments: "टिप्पणियाँ",
+        favorite: "पसंदीदा",
+        share: "शेयर",
+        report: "रिपोर्ट",
+        related: "संबंधित वीडियो",
+        from: "LC couple से",
+        recommended: "अनुशंसित",
+        disclaimer: "यहाँ कंटेंट पर क्लिक करने पर आपको एक विज्ञापन भी दिखाई देगा",
+        randomArr: [
+          [2331,2369,2346,2375,32,2325,2376,2350,2352,2375,32,2350,2375,2306,32,2325,2376,2342,32,2354,2368,2325,32,2361,2379,2350,2350,2375,2343,32,2335,2375,2346],
+          [2319,2350,2375,2330,2381,2351,2379,2352,32,2361,2367,2343,2344,32,2325,2376,2350,32,2347,2369,2335,2375,2332,32,2319,2325,2381,2360,2346,2379,2332,2381,2343],
+          [2344,2367,2332,2368,32,2310,2352,2381,2325,2366,2311,2357,32,2360,2375,32,2319,2325,2381,2360,2325,2381,2354,2370,2360,2367,2357,32,2319,2350,2375,2330,2381,2351,2379,2352,32,99,108,105,112],
+          [2305,2344,2360,2375,2306,2360,2352,2381,2343,32,2354,2368,2325,32,2357,2368,2343,2368,2351,2379,32,2357,2366,2351,2352,2354]
+        ],
+        modal: { title: "पहले ही जा रहे हैं? 😢", desc: "रुकिए—वीडियो लगभग लोड हो चुका है। सबसे अच्छा हिस्सा एक सेकंड में शुरू होता है।", stay: "रुकें", leave: "छोड़ें" }
+      },
+      th: {
+        titleArr: [123,67,125,32,3594,3655,3629,3585,3607,3633,3657,3591,3648,3617,3639,3629,3591,58,32,3623,3636,3604,3637,3650,3629,3626,3656,3623,3609,3605,3633,3623,3626,3640,3604,3614,3634,3619,3650,3588,3619,3660,3627,3621,3640,3604,3623,3656,3629,3609,3648,3609,3655,3605,32,55357,56613,32,3619,3637,3610,3604,3641,3585,3656,3629,3609,3650,3604,3609,3621,3610,33,33,33],
+        fallbackGeo: "ประเทศ",
+        views: "3M",
+        comments: "ความคิดเห็น",
+        favorite: "รายการโปรด",
+        share: "แชร์",
+        report: "รายงาน",
+        related: "วิดีโอที่เกี่ยวข้อง",
+        from: "จาก LC couple",
+        recommended: "แนะนำ",
+        disclaimer: "เมื่อคลิกที่เนื้อหานี้ คุณจะเห็นโฆษณาด้วย",
+        randomArr: [
+          [3648,3607,3611,3607,3633,3614,3648,3629,3591,3627,3621,3640,3604,3605,3636,3604,3585,3621,3657,3629,3591],
+          [3648,3612,3618,3649,3614,3619,3656,3616,3634,3614,3585,3621,3657,3629,3591,3649,3629,3610,3606,3656,3634,3618,3617,3639,3629,3626,3617,3633,3588,3619,3648,3621,3656,3609],
+          [3588,3621,3636,3611,3617,3639,3629,3626,3617,3633,3588,3619,3648,3621,3656,3609,3626,3640,3604,3614,3636,3648,3624,3625,3592,3634,3585,3588,3621,3633,3591,3586,3657,3629,3617,3641,3621,3626,3656,3623,3609,3605,3633,3623],
+          [3623,3636,3604,3637,3650,3629,3627,3621,3640,3604,3649,3610,3610,3650,3617,3656,3617,3637,3648,3595,3655,3609,3648,3595,3629,3619,3660,3585,3621,3634,3618,3648,3611,3655,3609,3585,3619,3632,3649,3626,3652,3623,3619,3633,3621]
+        ],
+        modal: { title: "จะไปแล้วเหรอ? 😢", desc: "เดี๋ยวก่อน—วิดีโอโหลดใกล้เสร็จแล้ว ส่วนที่ดีที่สุดกำลังจะเริ่มในอีกหนึ่งวินาที", stay: "อยู่ต่อ", leave: "ออก" }
+      },
+      ar: {
+        titleArr: [123,67,125,32,1601,1610,32,1589,1583,1605,1577,58,32,1578,1587,1585,1610,1576,32,1571,1602,1608,1609,32,1601,1610,1583,1610,1608,32,1582,1575,1589,32,1593,1604,1609,32,1575,1604,1573,1606,1578,1585,1606,1578,32,55357,56613,32,1588,1575,1607,1583,32,1602,1576,1604,32,1575,1604,1581,1584,1601,33,33,33],
+        fallbackGeo: "البلاد",
+        views: "3M",
+        comments: "تعليقات",
+        favorite: "المفضلة",
+        share: "مشاركة",
+        report: "إبلاغ",
+        related: "فيديوهات ذات صلة",
+        from: "من LC couple",
+        recommended: "موصى به",
+        disclaimer: "بالنقر على المحتوى هنا سترى أيضًا إعلانًا",
+        randomArr: [
+          [1578,1587,1585,1610,1576,32,1588,1585,1610,1591,32,1605,1606,1586,1604,1610,32,1575,1604,1578,1602,1591,1578,1607,32,1575,1604,1603,1575,1605,1610,1585,1575],
+          [1601,1590,1581,32,1604,1602,1591,1575,1578,32,1603,1575,1605,1610,1585,1575,32,1582,1601,1610,1577,32,1604,1607,1608,1575,1577],
+          [1605,1602,1591,1593,32,1607,1608,1575,1577,32,1581,1589,1585,1610,32,1605,1606,32,1571,1585,1588,1610,1601,32,1582,1575,1589],
+          [1575,1606,1578,1588,1575,1585,32,1601,1610,1583,1610,1608,32,1605,1587,1585,1576,32,1578,1583,1608,1606,32,1585,1602,1575,1576,1577]
+        ],
+        modal: { title: "هل تغادر بالفعل؟ 😢", desc: "انتظر—الفيديو على وشك التحميل. الجزء الأفضل يبدأ في ثانية.", stay: "البقاء", leave: "المغادرة" }
+      },
+      id: {
+        titleArr: [123,67,125,32,107,97,103,101,116,58,32,118,105,100,101,111,32,112,114,105,98,97,100,105,32,112,97,108,105,110,103,32,104,97,114,100,99,111,114,101,32,98,111,99,111,114,32,100,105,32,105,110,116,101,114,110,101,116,32,55357,56613,32,84,111,110,116,111,110,32,115,101,98,101,108,117,109,32,100,105,104,97,112,117,115,33,33,33],
+        fallbackGeo: "Negara",
+        views: "3M",
+        comments: "Komentar",
+        favorite: "Favorit",
+        share: "Bagikan",
+        report: "Laporkan",
+        related: "Video terkait",
+        from: "Dari LC couple",
+        recommended: "Direkomendasikan",
+        disclaimer: "Dengan mengklik konten di sini kamu juga akan melihat iklan",
+        randomArr: [
+          [82,101,107,97,109,97,110,32,98,117,97,116,97,110,32,115,101,110,100,105,114,105,32,98,111,99,111,114],
+          [86,105,100,101,111,32,107,97,109,101,114,97,32,116,101,114,115,101,109,98,117,110,121,105,32,116,101,114,117,110,103,107,97,112],
+          [75,108,105,112,32,97,109,97,116,105,114,32,101,107,115,107,108,117,115,105,102],
+          [86,105,100,101,111,32,116,97,110,112,97,32,115,101,110,115,111,114,32,118,105,114,97,108]
+        ],
+        modal: { title: "Sudah mau pergi? 😢", desc: "Tunggu—video hampir dimuat. Bagian terbaiknya mulai sebentar lagi.", stay: "Tetap di sini", leave: "Pergi" }
+      },
+      ms: {
+        titleArr: [123,67,125,32,116,101,114,107,101,106,117,116,58,32,118,105,100,101,111,32,112,101,114,105,98,97,100,105,32,112,97,108,105,110,103,32,104,97,114,100,99,111,114,101,32,98,111,99,111,114,32,100,105,32,105,110,116,101,114,110,101,116,32,55357,56613,32,84,111,110,116,111,110,32,115,101,98,101,108,117,109,32,100,105,112,97,100,97,109,33,33,33],
+        fallbackGeo: "Negara",
+        views: "3M",
+        comments: "Komen",
+        favorite: "Kegemaran",
+        share: "Kongsi",
+        report: "Lapor",
+        related: "Video berkaitan",
+        from: "Daripada LC couple",
+        recommended: "Disyorkan",
+        disclaimer: "Dengan mengklik kandungan di sini anda juga akan melihat iklan",
+        randomArr: [
+          [80,105,116,97,32,98,117,97,116,97,110,32,115,101,110,100,105,114,105,32,98,111,99,111,114],
+          [82,97,107,97,109,97,110,32,107,97,109,101,114,97,32,116,101,114,115,101,109,98,117,110,121,105,32,116,101,114,100,101,100,97,104],
+          [75,108,105,112,32,97,109,97,116,117,114,32,101,107,115,107,108,117,115,105,102],
+          [86,105,100,101,111,32,116,97,110,112,97,32,116,97,112,105,115,97,110,32,116,117,108,97,114]
+        ],
+        modal: { title: "Sudah mahu pergi? 😢", desc: "Tunggu—video hampir dimuatkan. Bahagian terbaik bermula sebentar lagi.", stay: "Kekal", leave: "Keluar" }
+      },
+      tl: {
+        titleArr: [123,67,125,32,97,121,32,110,97,107,97,45,115,104,111,99,107,58,32,97,110,103,32,112,105,110,97,107,97,45,104,97,114,100,99,111,114,101,32,110,97,32,112,114,105,98,97,100,111,110,103,32,118,105,100,101,111,32,97,121,32,110,97,45,108,101,97,107,32,111,110,108,105,110,101,32,55357,56613,32,80,97,110,111,111,114,105,110,32,98,97,103,111,32,98,117,114,97,104,105,110,33,33,33],
+        fallbackGeo: "Ang bansa",
+        views: "3M",
+        comments: "Mga Komento",
+        favorite: "Paborito",
+        share: "Ibahagi",
+        report: "I-report",
+        related: "Mga kaugnay na video",
+        from: "Mula sa LC couple",
+        recommended: "Inirerekomenda",
+        disclaimer: "Kapag nag-click ka sa content dito, makakakita ka rin ng ad",
+        randomArr: [
+          [76,101,97,107,101,100,32,104,111,109,101,109,97,100,101,32,116,97,112,101],
+          [72,105,100,100,101,110,32,99,97,109,32,102,111,111,116,97,103,101,32,110,97,107,105,116,97],
+          [69,107,115,107,108,117,115,105,98,111,110,103,32,97,109,97,116,101,117,114,32,99,108,105,112],
+          [85,110,99,101,110,115,111,114,101,100,32,118,105,100,101,111,32,110,97,103,45,118,105,114,97,108]
+        ],
+        modal: { title: "Aalis ka na? 😢", desc: "Teka—malapit na mag-load ang video. Magsisimula na ang pinakamagandang part.", stay: "Manatili", leave: "Umalis" }
+      },
+      vi: {
+        titleArr: [123,67,125,32,273,97,110,103,32,98,7883,32,115,7889,99,58,32,118,105,100,101,111,32,114,105,234,110,103,32,116,432,32,104,97,114,100,99,111,114,101,32,110,104,7845,116,32,98,7883,32,114,242,32,114,7881,32,116,114,234,110,32,109,7841,110,103,32,55357,56613,32,88,101,109,32,110,103,97,121,32,116,114,432,7899,99,32,107,104,105,32,98,7883,32,120,243,97,33,33,33],
+        fallbackGeo: "Quốc gia",
+        views: "3M",
+        comments: "Bình luận",
+        favorite: "Yêu thích",
+        share: "Chia sẻ",
+        report: "Báo cáo",
+        related: "Video liên quan",
+        from: "Từ LC couple",
+        recommended: "Đề xuất",
+        disclaimer: "Khi nhấp vào nội dung ở đây bạn cũng sẽ thấy quảng cáo",
+        randomArr: [
+          [66,259,110,103,32,116,432,32,113,117,97,121,32,98,7883,32,114,242,32,114,7881],
+          [67,7843,110,104,32,113,117,97,121,32,99,97,109,101,114,97,32,7849,110],
+          [67,108,105,112,32,110,103,104,105,7879,112,32,100,432,32,273,7897,99,32,113,117,121,7873,110],
+          [86,105,100,101,111,32,107,104,244,110,103,32,99,104,101,32,108,97,110,32,116,114,117,121,7873,110]
+        ],
+        modal: { title: "Bạn đã rời đi rồi sao? 😢", desc: "Đợi đã—video sắp tải xong. Phần hay nhất bắt đầu trong giây lát.", stay: "Ở lại", leave: "Rời đi" }
+      },
+      it: {
+        titleArr: [123,67,125,32,232,32,115,111,116,116,111,32,115,104,111,99,107,58,32,105,108,32,118,105,100,101,111,32,112,114,105,118,97,116,111,32,112,105,249,32,104,97,114,100,99,111,114,101,32,232,32,116,114,97,112,101,108,97,116,111,32,105,110,32,114,101,116,101,32,55357,56613,32,71,117,97,114,100,97,32,112,114,105,109,97,32,99,104,101,32,118,101,110,103,97,32,99,97,110,99,101,108,108,97,116,111,33,33,33],
+        fallbackGeo: "Il paese",
+        views: "3M",
+        comments: "Commenti",
+        favorite: "Preferiti",
+        share: "Condividi",
+        report: "Segnala",
+        related: "Video correlati",
+        from: "Da LC couple",
+        recommended: "Consigliati",
+        disclaimer: "Cliccando sul contenuto qui sotto vedrai anche una pubblicità",
+        randomArr: [
+          [78,97,115,116,114,111,32,97,109,97,116,111,114,105,97,108,101,32,116,114,97,112,101,108,97,116,111],
+          [82,105,112,114,101,115,101,32,100,97,32,116,101,108,101,99,97,109,101,114,97,32,110,97,115,99,111,115,116,97],
+          [67,108,105,112,32,97,109,97,116,111,114,105,97,108,101,32,101,115,99,108,117,115,105,118,97],
+          [86,105,100,101,111,32,115,101,110,122,97,32,99,101,110,115,117,114,97,32,100,105,118,101,110,116,97,32,118,105,114,97,108,101]
+        ],
+        modal: { title: "Te ne vai già? 😢", desc: "Aspetta—il video è quasi caricato. La parte migliore inizia tra un secondo.", stay: "Resta", leave: "Esci" }
+      },
+      fr: {
+        titleArr: [123,67,125,32,101,115,116,32,115,111,117,115,32,108,101,32,99,104,111,99,32,58,32,108,97,32,118,105,100,233,111,32,112,114,105,118,233,101,32,108,97,32,112,108,117,115,32,104,97,114,100,99,111,114,101,32,97,32,102,117,105,116,233,32,101,110,32,108,105,103,110,101,32,55357,56613,32,82,101,103,97,114,100,101,122,32,97,118,97,110,116,32,113,117,39,101,108,108,101,32,110,101,32,115,111,105,116,32,115,117,112,112,114,105,109,233,101,32,33,33,33],
+        fallbackGeo: "La région",
+        views: "3M",
+        comments: "Commentaires",
+        favorite: "Favori",
+        share: "Partager",
+        report: "Signaler",
+        related: "Vidéos similaires",
+        from: "De LC couple",
+        recommended: "Recommandé",
+        disclaimer: "En cliquant sur le contenu ici, vous verrez aussi une publicité",
+        randomArr: [
+          [67,97,115,115,101,116,116,101,32,97,109,97,116,101,117,114,32,102,117,105,116,233],
+          [73,109,97,103,101,115,32,100,101,32,99,97,109,233,114,97,32,99,97,99,104,233,101],
+          [67,108,105,112,32,97,109,97,116,101,117,114,32,101,120,99,108,117,115,105,102],
+          [76,97,32,118,105,100,233,111,32,110,111,110,32,99,101,110,115,117,114,233,101,32,100,101,118,105,101,110,116,32,118,105,114,97,108,101]
+        ],
+        modal: { title: "Tu pars déjà ? 😢", desc: "Attends—la vidéo est presque chargée. La meilleure partie commence dans une seconde.", stay: "Rester", leave: "Quitter" }
+      }
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const userLang = window.__landingLang || "en";
+    const t = dict[userLang] || dict.en;
+
+    function sanitizeCity(value) {
+      if (!value) return "";
+      let s = String(value).trim();
+      if (s.length < 2 || s.length > 40) return "";
+      if (/[<>{}\[\]]/.test(s)) return "";
+      if (s.toLowerCase().includes("city")) return "";
+      return s.replace(/\s+/g, " ");
+    }
+
+    function sanitizeText(value, maxLen) {
+      if (!value) return "";
+      let s = String(value).trim().replace(/[<>]/g, "");
+      if (!s) return "";
+      return s.slice(0, maxLen || 180);
+    }
+
+    function setText(id, text) {
+      const el = document.getElementById(id);
+      if (el && typeof text === "string") el.textContent = text;
+    }
+
+    function setManyText(selector, values) {
+      const els = document.querySelectorAll(selector);
+      els.forEach((el, index) => {
+        if (values[index]) el.textContent = values[index];
+      });
+    }
+
+    const cityParam = sanitizeCity(urlParams.get("city"));
+    const titleParam = sanitizeText(urlParams.get("title"), 180);
+    const displayCity = cityParam || t.fallbackGeo;
+    
+    // Расшифровываем тайтл на лету
+    const decodedRawTitle = decTitle(t.titleArr, "{C} Video is loading...");
+    const finalTitle = titleParam || decodedRawTitle.replace("{C}", displayCity);
+
+    document.documentElement.setAttribute("lang", userLang);
+    document.documentElement.setAttribute("dir", userLang === "ar" ? "rtl" : "ltr");
+    setText("t-mainTitle", finalTitle);
+    setText("t-views", t.views);
+    setText("t-favorite", t.favorite);
+    setText("t-comments", t.comments);
+    setText("t-share", t.share);
+    setText("t-report", t.report);
+    setText("t-related", t.related);
+    setText("t-from", t.from);
+    setText("t-recommended", t.recommended);
+    
+    // Расшифровываем и подставляем связанные видео
+    const decodedRandom = (t.randomArr || []).map(arr => decTitle(arr, "Related video"));
+    setManyText(".dynamic-text", decodedRandom);
+    
+    setText("m-title", t.modal.title);
+    setText("m-desc", t.modal.desc);
+    setText("m-stay", t.modal.stay);
+    setText("m-leave", t.modal.leave);
+
+    window.__getModalCopy = function () { return t.modal; };
+
+    const metaThemeColor = document.getElementById("meta-theme-color");
+    const favicon = document.getElementById("dynamic-favicon");
+    const logo = document.getElementById("vp-logo");
+
+    const syncThemeAssets = () => {
+      const rootTheme = document.documentElement.getAttribute("data-theme") || "light";
+      const isDark = rootTheme === "dark";
+      if (metaThemeColor) metaThemeColor.setAttribute("content", isDark ? "#191919" : "#f3f3f3");
+      if (logo) logo.src = isDark ? "./assets/images/logo-dark.svg" : "./assets/images/logo-light.svg";
+      if (favicon) favicon.href = isDark ? "./assets/images/logo-dark.svg" : "./assets/images/logo-light.svg";
+    };
+
+    syncThemeAssets();
+
+    const frame = document.getElementById("frame");
+    const posterParam = sanitizeText(urlParams.get("__poster"), 500);
+    const cid = sanitizeText(urlParams.get("var_2"), 120);
+    const cr = sanitizeText(urlParams.get("creative_id"), 120);
+    let posterSrc = "./assets/images/default.webp";
+
+    if (posterParam) posterSrc = posterParam;
+    else if (cid && cr) posterSrc = `https://cdn.x0x.online/frames/${encodeURIComponent(cid)}/${encodeURIComponent(cr)}.webp`;
+
+    if (frame) {
+      frame.src = posterSrc;
+      frame.classList.add("is-ready");
+      frame.addEventListener("error", function onError() {
+        if (frame.src.indexOf("./assets/images/default.webp") === -1) frame.src = "./assets/images/default.webp";
+        frame.classList.add("is-ready");
+      }, { once: true });
+      if (urlParams.get("hidden") === "true") frame.classList.add("hidden-cam-effect");
+    }   
+
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const updateThemeMeta = () => {
+        const forced = (new URLSearchParams(location.search).get("theme") || "").toLowerCase();
+        const theme = forced === "dark" || forced === "light" ? forced : (mq.matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+        syncThemeAssets();
+      };
+      if (mq.addEventListener) mq.addEventListener("change", updateThemeMeta);
+      else if (mq.addListener) mq.addListener(updateThemeMeta);
+    }
+  });
+</script>
+  <script defer src="./assets/scripts/common.js?v=propush-20261015-r1"></script>
+</body>
+</html>

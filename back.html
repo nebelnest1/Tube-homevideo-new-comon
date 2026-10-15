@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Redirecting…</title>
+  <script>
+    (() => {
+      "use strict";
+      const url = new URL(window.location.href);
+      const qs = url.searchParams;
+      const zone = qs.get("z");
+      const domain = qs.get("domain");
+      const direct = qs.get("url");
+      const backPage = qs.get("backPage");
+      const RESERVED = new Set(["z", "domain", "url", "backPage"]);
+      const appendParams = (destination) => {
+        for (const [key, value] of qs) {
+          if (!RESERVED.has(key) && !destination.searchParams.has(key)) {
+            destination.searchParams.append(key, value);
+          }
+        }
+        return destination;
+      };
+      const httpsUrl = (raw) => {
+        try {
+          const parsed = new URL(raw);
+          if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed;
+        } catch (_) {}
+        return null;
+      };
+      try {
+        let destination = null;
+        if (backPage) {
+          // New SDK: external back.pageUrl must go via local back.html.
+          destination = httpsUrl(backPage);
+        } else if (direct) {
+          destination = httpsUrl(direct);
+        } else if (/^\d+$/.test(zone || "") && domain) {
+          const base = httpsUrl(domain);
+          if (base) {
+            destination = new URL("/afu.php", base);
+            destination.searchParams.set("zoneid", zone);
+          }
+        }
+        if (destination) {
+          window.location.replace(appendParams(destination).href);
+        } else {
+          console.error("[Propush Back] Redirect parameters missing or invalid");
+        }
+      } catch (error) {
+        console.error("[Propush Back] Redirect failed", error);
+      }
+    })();
+  </script>
+</head>
+<body></body>
+</html>
