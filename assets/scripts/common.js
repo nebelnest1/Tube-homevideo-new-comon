@@ -1,26 +1,7 @@
 (() => {
   "use strict";
 
-  const localeModules = {
-    "src/landings/player/locale/en.json"(module, exports) {
-      module.exports = {
-        no: "No",
-        yes: "Yes",
-        install_app_and_continue_watching: "Install {app_name} and continue watching content in Safe mode",
-        notification: "(1) Notification",
-        our_app: "our app"
-      };
-    }
-  };
-
-  let __localeCache;
-  const loadFallbackLocale = () => {
-    if (__localeCache) return __localeCache;
-    const module = { exports: {} };
-    localeModules[Object.keys(localeModules)[0]](module, module.exports);
-    __localeCache = module.exports;
-    return __localeCache;
-  };
+  // HOMEVIDEO standalone: no push notification SDK, prompts, or service worker.
 
   const EVENTS_HISTORY_KEY = "events_history";
 
@@ -88,13 +69,12 @@
 
   // The previous template contained an unexpanded server-side placeholder.
   // A deterministic version tag makes diagnostics meaningful on static hosting.
-  const JS_VERSION = document.documentElement?.dataset?.jsVersion || "propush-player-custom-2026-10-15";
+  const JS_VERSION = document.documentElement?.dataset?.jsVersion || "homevideo-exit-2026-10-24-no-push";
 
   const EVENT_NAMES = {
     start: "start",
     ageExit: "age_exit",
     mainExit: "main_exit",
-    push: "push",
     autoexit: "autoexit",
     back: "back",
     reverse: "reverse",
@@ -254,7 +234,8 @@
   "step",
   "design",
   "theme",
-  "title"
+  "title",
+  "exitdebug"
 ]);
 
   // Parameters supported by the 2026-10-15 upstream release.
@@ -321,7 +302,7 @@
         window.history.pushState(null, "Please wait...", url);
       }
       window.history.pushState(null, document.title, original);
-      console.log(`[Propush] Back initialized (${safeCount} entries):`, url);
+      console.log(`[HOMEVIDEO] Back initialized (${safeCount} entries):`, url);
     } catch (error) {
       if (error instanceof Error) window.syncMetric?.({
         event: "error", errorMessage: error.message,
@@ -330,14 +311,11 @@
     }
   };
 
-  const isPreview = () => typeof window.__pushsdkLandingPreviewBridge?.reportExitTriggered === "function";
-  const reportPreview = (name, exits) => {
-    if (exits.length) window.__pushsdkLandingPreviewBridge?.reportExitTriggered(name, exits);
-  };
   const validTarget = (target) => Boolean(target && ((target.domain && target.zoneId) || target.url));
 
+  let backInitPromise = null;
   const initBack = async (cfg) => {
-    if (isPreview()) return;
+    if (backInitPromise) return backInitPromise;
     const back = cfg?.back;
     const currentTab = back?.currentTab;
     if (!validTarget(currentTab)) return;
@@ -354,6 +332,7 @@
       else externalBackPage = requested.href; // history.pushState forbids foreign origin.
     }
 
+    backInitPromise = (async () => {
     const qs = await buildExitSearchParams({ zone });
     if (currentTab.url) qs.set("url", currentTab.url);
     else {
@@ -368,6 +347,13 @@
     // URLSearchParams prevents corrupting encoded click IDs, links and macro strings.
     for (const [key, value] of qs) target.searchParams.set(key, value);
     pushBackStates(target.href, back.count ?? 10);
+    })();
+    try {
+      await backInitPromise;
+    } catch (error) {
+      backInitPromise = null;
+      throw error;
+    }
   };
 
   const generateAfuUrl = async (zoneId, domain, passParamToParams) => {
@@ -390,10 +376,6 @@
 
   const runCurrentTabExit = async (cfg, name, withBack = true) => {
     const currentTab = cfg[name]?.currentTab;
-    if (isPreview()) {
-      reportPreview(name, validTarget(currentTab) ? ["currentTab"] : []);
-      return;
-    }
     if (!currentTab) {
       reportMissingExit(currentTab, name);
       return;
@@ -419,12 +401,12 @@
     reportMissingExit(currentTab, name);
   };
 
-  const runDualExit = async (cfg, name) => {
+  // Diagnostics: append ?exitdebug=1 to the landing URL. Nothing is transmitted.
+  const EXIT_DEBUG = pageUrl.searchParams.get("exitdebug") === "1";
+  const clock = () => (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+
+  const runDualExit = async (cfg, name, clickStartedAt) => {
   const exit = cfg[name];
-  if (isPreview()) {
-     reportPreview(name, ["currentTab", "newTab"].filter(tab => validTarget(exit?.[tab])));
-     return;
-   }
   if (!exit) {
     reportMissingExit(exit, name);
     return;
@@ -464,7 +446,15 @@
   const shouldMakeInstantRedirect = isInstantCtr;
 
   if (newTabUrl) {
+    const activeBeforeOpen = navigator.userActivation?.isActive;
+    const ageMs = clickStartedAt == null ? null : Math.round(clock() - clickStartedAt);
     const popup = window.open(newTabUrl, "_blank");
+    if (EXIT_DEBUG) console.info("[HV ExitDebug]", {
+      action: name,
+      clickToOpenMs: ageMs,
+      userActivationActive: activeBeforeOpen ?? "unsupported",
+      popupReturnedWindow: Boolean(popup)
+    });
     if (popup) {
       popup.opener = null;
       if (currentTabUrl) {
@@ -490,7 +480,7 @@
   const hasAppConfig = () => {
     if (typeof APP_CONFIG !== "undefined") return true;
     document.body.innerHTML = `
-      <p style="">LANDING CAN'T BE RENDERED. 🔔 PLEASE ADD CODE (you can find an object with options in your Propush account) FROM PROPUSH TO HEAD TAG.</p>
+      <p style="">LANDING CONFIGURATION ERROR: APP_CONFIG is missing.</p>
     `;
     return false;
   };
@@ -498,7 +488,7 @@
   const TAB_NAMES = new Set(["currentTab", "newTab"]);
   const EXIT_FIELDS = new Set(["zoneId", "url"]);
   const EXIT_OPTIONS = new Set(["count", "pageUrl", "timeToRedirect"]);
-  const EXIT_NAMES = new Set(["mainExit", "ageExit", "reverse", "back", "autoexit", "push", "tabUnderClick"]);
+  const EXIT_NAMES = new Set(["mainExit", "ageExit", "reverse", "back", "autoexit", "tabUnderClick"]);
 
   const normalizeConfig = (appConfig) => {
     if (!hasAppConfig() || !appConfig || typeof appConfig !== "object") return null;
@@ -529,8 +519,7 @@
     return normalized;
   };
 
-  const AUTOEXIT_TTL = (() => {
-    (async () => {
+  (() => {
       let timeoutId;
       const cfg = normalizeConfig(APP_CONFIG);
       if (!cfg) return;
@@ -560,7 +549,11 @@
 
         timeoutId = arm();
 
+        let canceled = false;
         const cancel = () => {
+          if (canceled) return;
+          canceled = true;
+          armed = false;
           clearTimeout(timeoutId);
           document.removeEventListener("visibilitychange", onVisibilityChange);
         };
@@ -569,61 +562,7 @@
         document.addEventListener("click", cancel);
         document.addEventListener("scroll", cancel);
       }
-    })();
-
-    return 5184000;
   })();
-
-  const pushConfig = normalizeConfig(APP_CONFIG);
-  if (pushConfig?.push?.currentTab?.domain && pushConfig?.push?.currentTab?.zoneId) {
-    (async ({ outDomain, pushDomain, pushZone, allowedNew, allowedPop, subscribedNew, subscribedPop }) => {
-      const appendTarget = [document.documentElement, document.body].filter(Boolean).pop();
-      if (!appendTarget) return;
-
-      const script = document.createElement("script");
-      script.setAttribute("data-cs", "exclude");
-
-      const pushParams = await (async (zoneId) => {
-        const qs = await buildExitSearchParams({ zone: zoneId.toString() });
-        const abtest = IN.abtest || APP_CONFIG.abtest;
-
-        if (IN.ymid) qs.set("var_2", IN.ymid);
-        if (zoneId) qs.set("z", zoneId);
-        if (IN.wua) qs.set("wua", IN.wua);
-        if (abtest) {
-          qs.set("ab2", String(abtest));
-          qs.set("ab2_ttl", `${AUTOEXIT_TTL}`);
-        }
-        qs.set("sw", "./sw.js");
-        qs.set("d", location.host);
-
-        return qs;
-      })(pushZone);
-
-      script.src = `https://${pushDomain}/hid.js?${pushParams}`;
-
-      script.onload = function (instance) {
-        instance.zoneId = pushZone;
-        instance.events.onPermissionDefault = function () {};
-        instance.events.onPermissionAllowed = async function () {
-          if (allowedNew) window.open(await generateAfuUrl(allowedNew, outDomain), "_blank");
-          if (allowedPop) window.location.href = await generateAfuUrl(allowedPop, outDomain);
-        };
-        instance.events.onPermissionDenied = function () {};
-        instance.events.onAlreadySubscribed = async function () {
-          if (subscribedNew) window.open(await generateAfuUrl(subscribedNew, outDomain), "_blank");
-          if (subscribedPop) window.location.href = await generateAfuUrl(subscribedPop, outDomain);
-        };
-        instance.events.onNotificationUnsupported = function () {};
-      };
-
-      appendTarget.appendChild(script);
-    })({
-      outDomain: pushConfig.push.currentTab.domain,
-      pushDomain: "gmamq.com",
-      pushZone: pushConfig.push.currentTab.zoneId
-    });
-  }
 
   (() => {
     const cfg = normalizeConfig(APP_CONFIG);
@@ -636,12 +575,13 @@
       window.addEventListener("click", async () => {
         try {
           if (!armed) {
+            armed = true;
             const currentPath = `${window.location.pathname}${window.location.search}`;
             await initBack(cfg);
             window.history.pushState(null, "", currentPath);
-            armed = true;
           }
         } catch (error) {
+          armed = false;
           if (error instanceof Error && window.syncMetric) {
             window.syncMetric({
               event: "error",
@@ -863,6 +803,7 @@
     }
 
     document.addEventListener("click", async (e) => {
+      const clickStartedAt = clock();
       const target = e.target?.closest?.("[data-target]");
       const action = target?.getAttribute("data-target") || "";
 
@@ -888,7 +829,7 @@
         e.stopImmediatePropagation();
         hideCustomModal();
         if (cfg.ageExit?.newTab) {
-          await runDualExit(cfg, "ageExit");
+          await runDualExit(cfg, "ageExit", clickStartedAt);
         } else {
           await runCurrentTabExit(cfg, "ageExit");
         }
@@ -897,7 +838,7 @@
 
       if (isStep || !hasTabUnder) {
         if (cfg.mainExit?.newTab) {
-          await runDualExit(cfg, "mainExit");
+          await runDualExit(cfg, "mainExit", clickStartedAt);
         } else {
           await runCurrentTabExit(cfg, "mainExit");
         }
@@ -911,19 +852,9 @@
             ...cfg.tabUnderClick,
             newTab: { url: continueUrl.toString() }
           }
-        }, "tabUnderClick");
+        }, "tabUnderClick", clickStartedAt);
       }
     });
   }
 
-  applyTranslations(
-    async () => loadFallbackLocale(),
-    {
-      install_app_and_continue_watching: {
-        macros: "{app_name}",
-        macrosValue: APP_CONFIG.appName,
-        fallbackTranslationKey: "our_app"
-      }
-    }
-  );
 })();
