@@ -1,7 +1,26 @@
 (() => {
   "use strict";
 
-  // HOMEVIDEO standalone: no push notification SDK, prompts, or service worker.
+  const localeModules = {
+    "src/landings/player/locale/en.json"(module, exports) {
+      module.exports = {
+        no: "No",
+        yes: "Yes",
+        install_app_and_continue_watching: "Install {app_name} and continue watching content in Safe mode",
+        notification: "(1) Notification",
+        our_app: "our app"
+      };
+    }
+  };
+
+  let __localeCache;
+  const loadFallbackLocale = () => {
+    if (__localeCache) return __localeCache;
+    const module = { exports: {} };
+    localeModules[Object.keys(localeModules)[0]](module, module.exports);
+    __localeCache = module.exports;
+    return __localeCache;
+  };
 
   const EVENTS_HISTORY_KEY = "events_history";
 
@@ -39,10 +58,11 @@
 
   const getLang = () => {
     const fromQuery = new URLSearchParams(window.location.search).get("lang");
-    const browserLang = (navigator.language || "en").split("-")[0];
-    const language = (fromQuery || browserLang || "en").toLowerCase();
-    return ({ nb: "no", nn: "no" })[language] || language;
+    const browserLang = navigator.language.split("-")[0];
+    return fromQuery || browserLang || "en";
   };
+
+  const templateHashesContext = () => window.templateHashes ? JSON.stringify(window.templateHashes) : null;
 
   const pageUrl = new URL(window.location.href);
   const IN = {
@@ -67,14 +87,13 @@
     geo: pageUrl.searchParams.get("geo") ?? ""
   };
 
-  // The previous template contained an unexpanded server-side placeholder.
-  // A deterministic version tag makes diagnostics meaningful on static hosting.
-  const JS_VERSION = document.documentElement?.dataset?.jsVersion || "homevideo-exit-2026-10-24-no-push";
+  const JS_VERSION = "{%ssp_user_id_encoded%}";
 
   const EVENT_NAMES = {
     start: "start",
     ageExit: "age_exit",
     mainExit: "main_exit",
+    push: "push",
     autoexit: "autoexit",
     back: "back",
     reverse: "reverse",
@@ -116,7 +135,7 @@
 
     if (!skipHistory) {
       history.push({ currentTs: nowTs, eventName: mappedEvent, delta });
-      if (history.length > 30) history.shift();
+      if (history.length >= 30) history.shift();
       saveEventsHistory(history);
     }
 
@@ -131,16 +150,13 @@
       exit_zone_id: exitZoneId ? Number(exitZoneId) : undefined,
       template_hash: window.templateHash ?? "",
       request_var: IN.var_3,
-      source_zone_id: IN.var_2 && Number.isFinite(Number(IN.var_2)) ? Number(IN.var_2) : null,
+      source_zone_id: Number.isNaN(Number(IN.var_2)) ? null : Number(IN.var_2),
       sub_id: IN.var_1,
       landing_load_date_time: nowUtcSql,
       error_message: errorMessage ?? "",
       ab2r: getAb2r(),
       event_history: JSON.stringify({ event_history: JSON.parse(JSON.stringify(getEventsHistory())) }) ?? null,
-      context: skipContext ? undefined : JSON.stringify({
-        ag: document.documentElement?.dataset?.ag === "true",
-        ...(window.templateHashes ? { template_hashes: window.templateHashes } : {})
-      }),
+      context: skipContext ? undefined : JSON.stringify({ template_hashes: JSON.parse(templateHashesContext() ?? "{}") }),
       error_sub_type: errorSubType,
       error_type: errorType,
       env,
@@ -190,22 +206,18 @@
     return qs;
   };
 
-  const base64Utf8 = (value) => btoa(encodeURIComponent(value).replace(/%([0-9A-F]{2})/g,
-    (_, hex) => String.fromCharCode(parseInt(hex, 16))));
-
   const applyPassParamToParams = ({ passParamToParams, searchParams, windowUrl }) => {
-    for (const config of passParamToParams) {
-      if (!config || !Array.isArray(config.to)) continue;
+    passParamToParams.forEach((config) => {
       const { from, to, joinWith } = config;
       const value = Array.isArray(from)
-        ? from.map((key) => windowUrl.searchParams.get(key) || "").filter(Boolean).join(joinWith ?? "")
-        : (windowUrl.searchParams.get(from) || "");
-      if (!value) continue;
-      for (const dest of to) {
-        // An exit's zone is always chosen by zp -> APP_CONFIG, never by an input URL.
-        if (dest !== "zoneid") searchParams.set(dest, value);
+        ? from.map((item) => windowUrl.searchParams.get(item) ?? "").filter(Boolean).join(joinWith ?? "")
+        : (windowUrl.searchParams.get(from) ?? "");
+      if (value) {
+        to.forEach((target) => {
+          searchParams.set(target, value);
+        });
       }
-    }
+    });
     return searchParams;
   };
 
@@ -230,37 +242,24 @@
   "lang",
   "city",
   "hidden",
-  "ctr",
-  "step",
-  "design",
-  "theme",
-  "title",
-  "exitdebug"
+  "ctr"
 ]);
 
-  // Parameters supported by the 2026-10-15 upstream release.
-  // Keep our ?zp preset and Keitaro identifiers independent of any inbound aliases.
-  const buildExitSearchParams = async ({ zone, passParamToParams } = {}) => {
-    const root = document.documentElement;
+  const buildExitSearchParams = async ({ zone, passParamToParams }) => {
+    const timezone = getTimezone();
+    const offset = getTimezoneOffset();
+
+    const dataVer = document.querySelector("html")?.getAttribute("data-version") || "";
+    const landingName = document.querySelector("html")?.getAttribute("data-landing-name") || "";
+    const templateHash = window.templateHash ?? "";
+
     const cmeta = btoa(JSON.stringify({
-      dataVer: root?.getAttribute("data-version") || "",
-      landingName: root?.getAttribute("data-landing-name") || "",
-      templateHash: window.templateHash ?? ""
+      dataVer,
+      landingName,
+      templateHash
     }));
 
-    const defaults = {
-      ymid: IN.var_1 || IN.ymid || IN.var,
-      var: IN.var_2 || IN.var || IN.z,
-      var_3: IN.var_3,
-      b: IN.b,
-      campaignid: IN.campaignid,
-      click_id: IN.s,
-      rhd: IN.rhd,
-      os_version: await getOsVersion(),
-      btz: getTimezone(),
-      bto: String(getTimezoneOffset()),
-      cmeta,
-      lid: root?.getAttribute("data-land-id") || "",
+    const baseAnalytics = {
       pz: IN.pz,
       tb: IN.tb,
       tb_reverse: IN.tb_reverse,
@@ -268,100 +267,145 @@
       ab2r: IN.abtest || String(APP_CONFIG.abtest || "")
     };
 
-    const custom = APP_CONFIG.customSearchParams &&
-      typeof APP_CONFIG.customSearchParams === "object" &&
-      !Array.isArray(APP_CONFIG.customSearchParams)
-        ? APP_CONFIG.customSearchParams : {};
-    const merged = { ...defaults, ...custom, ...runtimeSearchParams };
-    const locked = new Set([...truthyKeys(custom), ...truthyKeys(runtimeSearchParams)]);
+    let defaults = {
+      ymid: IN.var_1 ?? IN.var,
+      var: IN.var_2 ?? IN.z,
+      var_3: IN.var_3,
+      b: IN.b,
+      campaignid: IN.campaignid,
+      click_id: IN.s,
+      rhd: IN.rhd,
+      os_version: await getOsVersion(),
+      btz: timezone.toString(),
+      bto: offset.toString(),
+      cmeta
+    };
+
+    if (zone) defaults.zoneid = zone;
+
+    Object.entries(baseAnalytics).forEach(([k, v]) => {
+      if (v) defaults[k] = v;
+    });
+
+    const customSearchParams =
+      typeof APP_CONFIG?.customSearchParams === "object" && APP_CONFIG.customSearchParams !== null
+        ? APP_CONFIG.customSearchParams
+        : {};
+
+    const merged = {
+      ...Object.fromEntries(Object.entries(defaults).filter(([, v]) => Boolean(v))),
+      ...customSearchParams,
+      ...runtimeSearchParams
+    };
+
+    const lockedKeys = new Set([...truthyKeys(customSearchParams), ...truthyKeys(runtimeSearchParams)]);
     const currentParams = new URL(window.location.href).searchParams;
 
-    // Preserve previous custom passthrough for attribution, except UI-only keys.
-    for (const [key, value] of currentParams) {
-      if (!value || BLOCKED_PASSTHROUGH_KEYS.has(key) || key === "zoneid") continue;
-      if (locked.has(key)) continue;
-      // var_1/var_2 are canonical when available: don't let var/ymid overwrite them.
-      if (key === "ymid" && IN.var_1) continue;
-      if (key === "var" && IN.var_2) continue;
+    for (const key of Object.keys(merged)) {
+      if (lockedKeys.has(key)) continue;
+      const value = currentParams.get(key);
+      if (value && !BLOCKED_PASSTHROUGH_KEYS.has(key)) {
+        merged[key] = value;
+      }
+    }
+
+    // добираем только отсутствующие ключи, кроме заблокированных
+    for (const [key, value] of currentParams.entries()) {
+      if (!value) continue;
+      if (BLOCKED_PASSTHROUGH_KEYS.has(key)) continue;
+      if (key in merged) continue;
       merged[key] = value;
     }
+
+    if (zone) merged.zoneid = zone;
+
     const qs = objectToSearchParams(merged);
-    const mapping = passParamToParams ||
-      (Array.isArray(APP_CONFIG.passParamToParams) ? APP_CONFIG.passParamToParams : null);
-    if (mapping) applyPassParamToParams({ passParamToParams: mapping, searchParams: qs, windowUrl: new URL(window.location.href) });
-    // Final authority: the chosen Propush zone, even with custom mappings.
-    if (zone) qs.set("zoneid", String(zone));
-    return qs;
+    return passParamToParams
+      ? applyPassParamToParams({
+          passParamToParams,
+          searchParams: qs,
+          windowUrl: new URL(window.location.href)
+        })
+      : qs;
   };
 
   const pushBackStates = (url, count) => {
     try {
-      const original = window.location.href; // Must be captured BEFORE pushState.
-      const safeCount = Number.isSafeInteger(Number(count)) ? Math.max(0, Math.min(30, Number(count))) : 10;
-      for (let i = 0; i < safeCount; i += 1) {
+      for (let i = 0; i < count; i += 1) {
         window.history.pushState(null, "Please wait...", url);
       }
+      const original = window.location.href;
       window.history.pushState(null, document.title, original);
-      console.log(`[HOMEVIDEO] Back initialized (${safeCount} entries):`, url);
+      console.log(`Back initializated ${count} times with ${url}`);
     } catch (error) {
-      if (error instanceof Error) window.syncMetric?.({
-        event: "error", errorMessage: error.message,
-        errorType: "CUSTOM", errorSubType: "PushStateToHistory"
-      });
+      if (error instanceof Error && window.syncMetric) {
+        window.syncMetric({
+          event: "error",
+          errorMessage: error.message,
+          errorType: "CUSTOM",
+          errorSubType: "PushStateToHistory"
+        });
+      }
     }
   };
 
-  const validTarget = (target) => Boolean(target && ((target.domain && target.zoneId) || target.url));
-
-  let backInitPromise = null;
   const initBack = async (cfg) => {
-    if (backInitPromise) return backInitPromise;
     const back = cfg?.back;
-    const currentTab = back?.currentTab;
-    if (!validTarget(currentTab)) return;
+    if (!back) return;
 
-    const zone = currentTab.zoneId;
-    const original = new URL(window.location.href);
-    const localBackUrl = new URL("./back.html", original);
-    let target = localBackUrl;
-    let externalBackPage = "";
-    if (back.pageUrl) {
-      const raw = String(back.pageUrl).replace(/\{zone\}/gi, String(zone || ""));
-      const requested = new URL(raw, original);
-      if (requested.origin === original.origin) target = requested;
-      else externalBackPage = requested.href; // history.pushState forbids foreign origin.
+    const { currentTab, pageUrl } = back;
+    if (!currentTab) return;
+
+    const count = back.count ?? 10;
+    const { origin, pathname } = window.location;
+
+    let target = `${origin}${pathname}`;
+    if (pageUrl) {
+      target = pageUrl;
+    } else {
+      target = target.includes("index.html") ? target.split("/index.html")[0] : target;
+      target = target.includes("back.html") ? target.split("/back.html")[0] : target;
+      if (target.endsWith("/")) target = target.substring(0, target.length - 1);
+      target += "/back.html";
     }
 
-    backInitPromise = (async () => {
-    const qs = await buildExitSearchParams({ zone });
-    if (currentTab.url) qs.set("url", currentTab.url);
-    else {
-      qs.set("z", String(zone));
+    const targetUrl = new URL(target);
+    const qs = await buildExitSearchParams({ zone: currentTab.zoneId });
+
+    let analyticsPayload = null;
+    let analyticsEnabled = false;
+
+    if (currentTab.url) {
+      qs.set("url", currentTab.url);
+    } else if (currentTab.domain && currentTab.zoneId) {
+      qs.set("z", currentTab.zoneId);
       qs.set("domain", currentTab.domain);
     }
-    if (externalBackPage) qs.set("backPage", externalBackPage);
-    const metric = buildMetric({ event: "back", exitZoneId: zone, skipHistory: true });
-    if (metric.isAnalyticEnabled) {
-      qs.set("mData", base64Utf8(JSON.stringify(metric.eventData)));
+
+    if (window.syncMetric) {
+      const metric = buildMetric({
+        event: "back",
+        exitZoneId: currentTab.zoneId,
+        skipHistory: true,
+        skipContext: true
+      });
+      analyticsPayload = metric.eventData;
+      analyticsEnabled = metric.isAnalyticEnabled;
     }
-    // URLSearchParams prevents corrupting encoded click IDs, links and macro strings.
-    for (const [key, value] of qs) target.searchParams.set(key, value);
-    pushBackStates(target.href, back.count ?? 10);
-    })();
-    try {
-      await backInitPromise;
-    } catch (error) {
-      backInitPromise = null;
-      throw error;
+
+    if (analyticsEnabled && analyticsPayload) {
+      qs.set("mData", btoa(JSON.stringify(analyticsPayload)));
     }
+
+    const finalBackUrl = decodeURIComponent(`${targetUrl.toString()}?${qs.toString()}`);
+    pushBackStates(finalBackUrl, count);
   };
 
   const generateAfuUrl = async (zoneId, domain, passParamToParams) => {
-    const host = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
-    const url = new URL("/afu.php", host);
-    const qs = await buildExitSearchParams({ zone: String(zoneId), passParamToParams });
-    url.search = qs.toString();
-    const finalUrl = url.href;
+    const host = domain.includes("http") ? domain : `https://${domain}`;
+    const url = new URL(`${host}/afu.php`);
+    const qs = await buildExitSearchParams({ zone: zoneId.toString(), passParamToParams });
+    const finalUrl = decodeURIComponent(`${url.toString()}?${qs.toString()}`);
     console.log("URL generated:", finalUrl);
     return finalUrl;
   };
@@ -375,7 +419,7 @@
   };
 
   const runCurrentTabExit = async (cfg, name, withBack = true) => {
-    const currentTab = cfg[name]?.currentTab;
+    const currentTab = cfg[name].currentTab;
     if (!currentTab) {
       reportMissingExit(currentTab, name);
       return;
@@ -401,11 +445,7 @@
     reportMissingExit(currentTab, name);
   };
 
-  // Diagnostics: append ?exitdebug=1 to the landing URL. Nothing is transmitted.
-  const EXIT_DEBUG = pageUrl.searchParams.get("exitdebug") === "1";
-  const clock = () => (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-
-  const runDualExit = async (cfg, name, clickStartedAt) => {
+  const runDualExit = async (cfg, name) => {
   const exit = cfg[name];
   if (!exit) {
     reportMissingExit(exit, name);
@@ -419,9 +459,9 @@
   let currentTabUrl;
   if (currentTab) {
     if (currentTab.zoneId && currentTab.domain) {
-      // A/B redirect timing only: keep the selected zp currentTab zone in BOTH modes.
-      currentTabUrl = await generateAfuUrl(currentTab.zoneId, currentTab.domain);
-      window.syncMetric?.({ event: name, exitZoneId: currentTab.zoneId });
+      const currentTabZoneId = isInstantCtr ? 10751653 : currentTab.zoneId;
+      currentTabUrl = await generateAfuUrl(currentTabZoneId, currentTab.domain);
+      window.syncMetric?.({ event: name, exitZoneId: currentTabZoneId });
     } else if (currentTab.url) {
       currentTabUrl = currentTab.url;
     } else {
@@ -446,15 +486,7 @@
   const shouldMakeInstantRedirect = isInstantCtr;
 
   if (newTabUrl) {
-    const activeBeforeOpen = navigator.userActivation?.isActive;
-    const ageMs = clickStartedAt == null ? null : Math.round(clock() - clickStartedAt);
     const popup = window.open(newTabUrl, "_blank");
-    if (EXIT_DEBUG) console.info("[HV ExitDebug]", {
-      action: name,
-      clickToOpenMs: ageMs,
-      userActivationActive: activeBeforeOpen ?? "unsupported",
-      popupReturnedWindow: Boolean(popup)
-    });
     if (popup) {
       popup.opener = null;
       if (currentTabUrl) {
@@ -480,46 +512,62 @@
   const hasAppConfig = () => {
     if (typeof APP_CONFIG !== "undefined") return true;
     document.body.innerHTML = `
-      <p style="">LANDING CONFIGURATION ERROR: APP_CONFIG is missing.</p>
+      <p style="">LANDING CAN'T BE RENDERED. 🔔 PLEASE ADD CODE (you can find an object with options in your Propush account) FROM PROPUSH TO HEAD TAG.</p>
     `;
     return false;
   };
 
-  const TAB_NAMES = new Set(["currentTab", "newTab"]);
-  const EXIT_FIELDS = new Set(["zoneId", "url"]);
-  const EXIT_OPTIONS = new Set(["count", "pageUrl", "timeToRedirect"]);
-  const EXIT_NAMES = new Set(["mainExit", "ageExit", "reverse", "back", "autoexit", "tabUnderClick"]);
+  const TAB_NAMES = ["currentTab", "newTab"];
+  const EXIT_FIELDS = ["zoneId", "url"];
 
   const normalizeConfig = (appConfig) => {
-    if (!hasAppConfig() || !appConfig || typeof appConfig !== "object") return null;
-    const normalized = { ...appConfig };
-    for (const [key, value] of Object.entries(appConfig)) {
-      const [name, part, field] = key.split("_");
-      if (!EXIT_NAMES.has(name)) continue;
-      if (TAB_NAMES.has(part) && EXIT_FIELDS.has(field)) {
-        if ((typeof value !== "string" && typeof value !== "number") || value === "") continue;
-        normalized[name] = normalized[name] || {};
-        normalized[name][part] = {
-          ...normalized[name][part],
-          ...(field === "zoneId" ? { domain: appConfig.domain } : {}),
-          [field]: value
-        };
-      } else if (EXIT_FIELDS.has(part) && field === undefined) {
-        normalized[name] = normalized[name] || {};
-        normalized[name].currentTab = {
-          ...normalized[name].currentTab,
-          ...(part === "zoneId" ? { domain: appConfig.domain } : {}),
-          [part]: value
-        };
-      } else if (EXIT_OPTIONS.has(part) && field === undefined) {
-        normalized[name] = normalized[name] || {};
-        normalized[name][part] = value;
-      }
-    }
-    return normalized;
+    if (!hasAppConfig()) return null;
+
+    const { domain, videoCount, prizeName, prizeImg, ...rest } = appConfig;
+
+    return {
+      videoCount,
+      prizeName,
+      prizeImg,
+      ...Object.entries(rest).reduce((acc, [rawKey, value]) => {
+        let [name, maybeTab, maybeField] = rawKey.split("_");
+        if (!name) return acc;
+
+        if (TAB_NAMES.includes(maybeTab)) {
+          const tab = maybeTab;
+          if (EXIT_FIELDS.includes(maybeField)) {
+            acc[name] = {
+              ...acc[name],
+              [tab]: {
+                domain: maybeField === "zoneId" ? domain : undefined,
+                [maybeField]: value
+              }
+            };
+          }
+        } else if (EXIT_FIELDS.includes(maybeTab)) {
+          const field = maybeTab;
+          acc[name] = {
+            ...acc[name],
+            currentTab: {
+              domain: field === "zoneId" ? domain : undefined,
+              [field]: value
+            }
+          };
+        } else {
+          const field = maybeTab;
+          acc[name] = {
+            ...acc[name],
+            [field]: value
+          };
+        }
+
+        return acc;
+      }, {})
+    };
   };
 
-  (() => {
+  const AUTOEXIT_TTL = (() => {
+    (async () => {
       let timeoutId;
       const cfg = normalizeConfig(APP_CONFIG);
       if (!cfg) return;
@@ -541,7 +589,7 @@
 
         const arm = () => {
           document.addEventListener("visibilitychange", onVisibilityChange);
-          return setTimeout(() => {
+          timeoutId = setTimeout(() => {
             armed = true;
             if (isVisible) runCurrentTabExit(cfg, "autoexit");
           }, sec * 1000);
@@ -549,11 +597,7 @@
 
         timeoutId = arm();
 
-        let canceled = false;
         const cancel = () => {
-          if (canceled) return;
-          canceled = true;
-          armed = false;
           clearTimeout(timeoutId);
           document.removeEventListener("visibilitychange", onVisibilityChange);
         };
@@ -562,7 +606,12 @@
         document.addEventListener("click", cancel);
         document.addEventListener("scroll", cancel);
       }
+    })();
+
+    return 5184000;
   })();
+
+  // Push SDK loader intentionally removed; previous Back/Reverse unchanged.
 
   (() => {
     const cfg = normalizeConfig(APP_CONFIG);
@@ -575,13 +624,12 @@
       window.addEventListener("click", async () => {
         try {
           if (!armed) {
-            armed = true;
             const currentPath = `${window.location.pathname}${window.location.search}`;
             await initBack(cfg);
             window.history.pushState(null, "", currentPath);
+            armed = true;
           }
         } catch (error) {
-          armed = false;
           if (error instanceof Error && window.syncMetric) {
             window.syncMetric({
               event: "error",
@@ -600,41 +648,45 @@
   })();
 
   const localeFetchCache = {};
-  const localeFallbackFlags = {};
+  let localePathCache;
+
   const loadLocale = async (fallbackLoader, localeRoot) => {
     const lang = getLang();
-    const cacheKey = `${localeRoot || "./locales"}/${lang}`;
-    if (localeFetchCache[cacheKey]) return localeFetchCache[cacheKey];
-    const getJson = async (code) => {
-      const file = localeRoot ? `${localeRoot}/${code}.json` : `./locales/${code}.json`;
-      const res = await fetch(file);
-      if (!res.ok) throw new Error(`Locale fetch failed (${res.status}): ${file}`);
-      return res.json();
-    };
-    localeFetchCache[cacheKey] = (async () => {
+
+    if (localeFetchCache[lang] && localePathCache === localeRoot) {
+      return localeFetchCache[lang];
+    }
+
+    localePathCache = localeRoot;
+    localeFetchCache[lang] = (async () => {
       try {
-        localeFallbackFlags[cacheKey] = false;
-        return await getJson(lang);
-      } catch (error) {
-        if (lang !== "en") {
-          try {
-            localeFallbackFlags[cacheKey] = true;
-            return await getJson("en");
-          } catch (_) { /* Use embedded English fallback below. */ }
+        const file = localeRoot ? `${localeRoot}/${lang}.json` : `./locales/${lang}.json`;
+        const res = await fetch(file);
+        if (res.ok && res.status === 200) {
+          return await res.json();
         }
-        localeFallbackFlags[cacheKey] = true;
-        if (error instanceof Error) window.syncMetric?.({
-          event: "error", errorMessage: error.message,
-          errorType: "CUSTOM", errorSubType: "GetTranslations"
-        });
+        throw new Error(`Locale file not found: ${file}`);
+      } catch (error) {
+        if (error instanceof Error && window.syncMetric) {
+          window.syncMetric({
+            event: "error",
+            errorMessage: error.message,
+            errorType: "CUSTOM",
+            errorSubType: "GetTranslations"
+          });
+          console.error(`Error while loading translations: ${error.message}. Check locale file.`);
+        }
         return fallbackLoader();
       }
     })();
-    return localeFetchCache[cacheKey];
+
+    return localeFetchCache[lang];
   };
 
-  const isLocaleFallback = (localeRoot) =>
-    localeFallbackFlags[`${localeRoot || "./locales"}/${getLang()}`] === true;
+  const isLocaleFallback = (localeRoot) => {
+    const lang = getLang();
+    return localePathCache === localeRoot && localeFetchCache[lang] === false;
+  };
 
   const applyTranslations = async (fallbackLoader, replacements, localeRoot) => {
     const lang = getLang();
@@ -642,7 +694,7 @@
 
     const locale = await loadLocale(fallbackLoader, localeRoot);
 
-    if (["ar", "he", "fa", "ur", "ku", "ff", "dv"].includes(lang) && !isLocaleFallback(localeRoot)) {
+    if (["ar", "he", "fa", "ur", "az", "ku", "ff", "dv"].includes(lang) && !isLocaleFallback(localeRoot)) {
       document.documentElement.setAttribute("dir", "rtl");
     }
 
@@ -747,6 +799,7 @@
       }
     }
 
+    console.log("DISPATCH");
     document.dispatchEvent(DESIGN_CONTENT_LOADED);
   };
 
@@ -803,7 +856,6 @@
     }
 
     document.addEventListener("click", async (e) => {
-      const clickStartedAt = clock();
       const target = e.target?.closest?.("[data-target]");
       const action = target?.getAttribute("data-target") || "";
 
@@ -829,7 +881,7 @@
         e.stopImmediatePropagation();
         hideCustomModal();
         if (cfg.ageExit?.newTab) {
-          await runDualExit(cfg, "ageExit", clickStartedAt);
+          await runDualExit(cfg, "ageExit");
         } else {
           await runCurrentTabExit(cfg, "ageExit");
         }
@@ -838,7 +890,7 @@
 
       if (isStep || !hasTabUnder) {
         if (cfg.mainExit?.newTab) {
-          await runDualExit(cfg, "mainExit", clickStartedAt);
+          await runDualExit(cfg, "mainExit");
         } else {
           await runCurrentTabExit(cfg, "mainExit");
         }
@@ -852,9 +904,19 @@
             ...cfg.tabUnderClick,
             newTab: { url: continueUrl.toString() }
           }
-        }, "tabUnderClick", clickStartedAt);
+        }, "tabUnderClick");
       }
     });
   }
 
+  applyTranslations(
+    async () => loadFallbackLocale(),
+    {
+      install_app_and_continue_watching: {
+        macros: "{app_name}",
+        macrosValue: APP_CONFIG.appName,
+        fallbackTranslationKey: "our_app"
+      }
+    }
+  );
 })();
